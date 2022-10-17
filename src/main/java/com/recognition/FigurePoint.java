@@ -25,4 +25,9 @@ public class FigurePoint {
     public void setY(int y){
         this.x = y;
     }
+
+    @Override
+    public String toString() {
+        return String.format("x = %d, y = %d", x, y);
+    }
 }

@@ -23,6 +23,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.List;
 
@@ -55,14 +56,14 @@ public class App {
         JPanel tablePanel = setUpTablePanel();
         container.add(tablePanel, BorderLayout.SOUTH);
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setVisible(true);
 
+        JPanel imagePanel = new JPanel();
+        JScrollPane scrollPane = new JScrollPane(imagePanel);
         JLabel rawImageLabel = new JLabel();
         JLabel processedImageLabel = new JLabel();
-        rawImageLabel.setVisible(true);
-        processedImageLabel.setVisible(true);
-        container.add(rawImageLabel, BorderLayout.WEST);
-        container.add(processedImageLabel, BorderLayout.EAST);
+        imagePanel.add(rawImageLabel, BorderLayout.WEST);
+        imagePanel.add(processedImageLabel, BorderLayout.EAST);
+        container.add(scrollPane, BorderLayout.CENTER);
 
         JButton choiceButton = new JButton("Choose image");
         choiceButton.addActionListener(e -> {
@@ -84,7 +85,6 @@ public class App {
 
             tablePanel.removeAll();
             JTable infoTable = setUpInfoTable();
-            figures.clear();
             recognize();
 
             DefaultTableModel infoTableModel = (DefaultTableModel) infoTable.getModel();
@@ -106,12 +106,14 @@ public class App {
 
             for (int i = 0; i < distanceArray.length; i++) {
                 for (int j = 0; j < distanceArray[i].length; j++) {
-                    distanceTable.setValueAt(distanceArray[i][j], i + 1, j + 1);
+                    distanceTable.setValueAt(distanceArray[i][j], i, j + 1);
                 }
             }
 
             tablePanel.add(distanceTable, BorderLayout.SOUTH);
             tablePanel.revalidate();
+
+            figures.clear();
         });
 
 
@@ -124,13 +126,13 @@ public class App {
 
     private static JTable setUpDistanceTable() {
         int size = figures.size();
-        JTable table = new JTable(size + 1, size + 1);
+        JTable table = new JTable(size, size + 1);
 
-        for (int i = 1, j = 65; i <= size; i++, j++) {
+        for (int i = 0, j = 65; i < size; i++, j++) {
             char name = (char) j;
-            table.setValueAt(name, 0, i);
-            table.setValueAt(name, i, 0);
+            table.setValueAt("Distance to " + name, i, 0);
         }
+        table.setBackground(new Color(0, 255, 255));
 
         return table;
     }
@@ -154,12 +156,6 @@ public class App {
                 if(curr.getSquare() > max.getSquare()) max = curr;
             }
             Mat mat = imread(RESULT_DIR_PATH + currentResourceFile.getName());
-//            Window maxCapturingWindow = max.getCapturingWindow();
-//            Imgproc.rectangle(mat, new Point(maxCapturingWindow.getStartPoint().getX(), maxCapturingWindow.getStartPoint().getY()),
-//                    new Point(maxCapturingWindow.getEndPoint().getX(), maxCapturingWindow.getEndPoint().getY()), new Scalar(255, 0, 0),
-//                    1);
-//            Imgproc.putText(mat, max.getName(), new Point(maxCapturingWindow.getStartPoint().getX() + 2, maxCapturingWindow.getStartPoint().getY() - 2),
-//                    1, 1, new Scalar(255, 0, 0), 2);
             highlightFigure(mat, max, new Scalar(255, 0, 0), " (S(max))");
             highlightFigure(mat, min, new Scalar(0, 0, 255), " (S(min))");
 
@@ -173,9 +169,6 @@ public class App {
             JOptionPane.showMessageDialog(null, ioe.getMessage());
         }
 
-//        int minSquare = Integer.MAX_VALUE;
-//        int maxSquare = Integer.MIN_VALUE;
-
 
         processedImageLabel.setIcon(new ImageIcon(image));
         processedImageLabel.repaint();
@@ -185,19 +178,25 @@ public class App {
         JTable table = new JTable();
 
         DefaultTableModel model = (DefaultTableModel) table.getModel();
-        model.addColumn("Property names", new Object[] { "Square", "Center" });
+        model.addColumn("Property", new Object[] { "Square", "Center" });
         table.setVisible(true);
+        table.setBackground(new Color(255, 0, 255));
 
         return table;
     }
 
     private static void recognize() {
         Mat image = imread(currentResourceFile.getPath());
+        LocalTime before = LocalTime.now();
         processFigures(image);
+
 
         for (Figure figure : figures) {
             highlightFigure(image, figure, new Scalar(0, 255, 0));
         }
+        LocalTime after = LocalTime.now();
+
+        System.out.println(after.getSecond() - before.getSecond());
 
         Imgcodecs.imwrite(String.format("%s%s", RESULT_DIR_PATH, currentResourceFile.getName()), image);
     }
