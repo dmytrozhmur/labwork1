@@ -15,6 +15,7 @@ public class Figure {
     private Window capturingWindow;
     private FigurePoint center;
     private Queue<FigurePoint> lastAddedRow = new LinkedList<>();
+    private String filePath;
 
     public Figure() {
         name = String.valueOf(nameCounter++);
@@ -23,9 +24,8 @@ public class Figure {
         center = new FigurePoint();
     }
 
-    public void addPixels(Queue<FigurePoint> points) {
-        lastAddedRow.addAll(points);
-        pixels.addAll(points);
+    public void addPixel(FigurePoint point) {
+        pixels.add(point);
     }
 
     public boolean checkBelonging(Queue<FigurePoint> points) {

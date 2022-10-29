@@ -26,19 +26,22 @@ import java.io.IOException;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
-        import static org.opencv.imgcodecs.Imgcodecs.imread;
+import static org.opencv.imgcodecs.Imgcodecs.imread;
+import static org.opencv.imgcodecs.Imgcodecs.imwrite;
 
 /**
  * Hello world!
  *
  */
 public class App {
-    public static final String RESOURCE_DIR_PATH = "./src/main/resources/raw/";
+    public static final String RESOURCE_DIR_PATH = "./src/main/resources/_BANK_U/";
     public static final String RESULT_DIR_PATH = "./src/main/resources/processed/";
     private static final String IMAGE_FORMAT = ".jpg";
     private static long imageCounter = 0;
-    private static File currentResourceFile;
+    private static File currentFileProcessing;
     private static List<Figure> figures = new ArrayList<>();
     //private static JTable table;
     private static int[][] distanceArray;
@@ -46,6 +49,107 @@ public class App {
     public static void main(String[] args) throws IOException {
         OpenCV.loadShared();
         setUpUi();
+        File[] resourceFiles = new File(RESOURCE_DIR_PATH).listFiles();
+
+        for (File resource : resourceFiles) {
+            processFigure(resource);
+        }
+        for (Figure figure : figures) {
+            System.out.println(figure.getPixels().get(0));
+        }
+    }
+
+
+    private static void recognize() {
+        Mat image = imread(currentFileProcessing.getPath());
+        LocalTime before = LocalTime.now();
+        processFigure(currentFileProcessing);
+
+
+        for (Figure figure : figures) {
+            highlightFigure(image, figure, new Scalar(0, 255, 0));
+        }
+        LocalTime after = LocalTime.now();
+
+        System.out.println(after.getSecond() - before.getSecond());
+
+        imwrite(String.format("%s%s", RESULT_DIR_PATH, currentFileProcessing.getName()), image);
+    }
+
+    private static void highlightFigure(Mat image, Figure figure, Scalar color, String... dopInfo) {
+        Window window = figure.getCapturingWindow();
+        FigurePoint center = figure.defineCenterPoint();
+        FigurePoint windowStartPoint = window.getStartPoint();
+        FigurePoint windowEndPoint = window.getEndPoint();
+
+        Imgproc.rectangle(image,
+                new Point(windowStartPoint.getX(), windowStartPoint.getY()),
+                new Point(windowEndPoint.getX(), windowEndPoint.getY()),
+                color, 1);
+        Imgproc.circle(
+                image, new Point(center.getX(), center.getY()), 1, color, 2);
+        Imgproc.putText(
+                image, figure.getName() + Arrays.stream(dopInfo).findFirst().orElse(""),
+                new Point(windowStartPoint.getX() + 2, windowStartPoint.getY() - 2),
+                1, 1, color, 2);
+    }
+
+    private static void countDistances() {
+        int quantity = figures.size();
+        distanceArray = new int[quantity][quantity];
+
+        for (int i = 0; i < quantity; i++) {
+            for (int j = 0; j < quantity; j++) {
+                distanceArray[i][j] = euclideanDistance(figures.get(i), figures.get(j));
+            }
+        }
+    }
+
+    private static int euclideanDistance(Figure figure1, Figure figure2) {
+        FigurePoint center1 = figure1.getCenter();
+        FigurePoint center2 = figure2.getCenter();
+
+        int xDiff = (int) Math.pow(center1.getX() - center2.getX(), 2);
+        int yDiff = (int) Math.pow(center1.getY() - center2.getY(), 2);
+
+        return (int) Math.sqrt(xDiff + yDiff);
+    }
+
+    private static void processFigure(File imageFile) {
+        String path = imageFile.getPath();
+        Mat image = imread(path);
+        Figure figure = new Figure();
+
+        for (int y = 0; y < image.rows(); y++) {
+            for (int x = 0; x < image.cols(); x++) {
+                if(image.get(y, x)[0] < 128) {
+                    figure.addPixel(new FigurePoint(x++, y));
+                }
+            }
+        }
+
+        figure.setFilePath(path);
+        FigurePoint startPoint = figure.defineCapturingWindow().getStartPoint();
+        figure.setPixels(figure.getPixels().stream()
+                .map(point -> new FigurePoint(point.getX() - startPoint.getX(), point.getY() - startPoint.getY()))
+                .collect(Collectors.toCollection(ArrayList::new)));
+        figures.add(figure);
+        highlightFigure(image, figure, new Scalar(255, 0, 200));
+        imwrite(String.format("%s%s", RESULT_DIR_PATH, imageFile.getName()), image);
+    }
+
+    private static Figure checkFigure(Queue<FigurePoint> points) {
+        for (Figure figure : figures) {
+            if(figure.checkBelonging(points)) return figure;
+        }
+
+        Figure figure = new Figure();
+        figures.add(figure);
+        return figure;
+    }
+
+    private static void printImage(byte[][] array) {
+        System.out.println(Arrays.deepToString(array));
     }
 
     private static void setUpUi() {
@@ -71,14 +175,14 @@ public class App {
             int response = fileChooser.showOpenDialog(null);
 
             if(response == JFileChooser.APPROVE_OPTION) {
-                currentResourceFile = fileChooser.getSelectedFile();
+                currentFileProcessing = fileChooser.getSelectedFile();
                 drawImage(rawImageLabel, RESOURCE_DIR_PATH);
             }
         });
 
         JButton processButton = new JButton("Process image");
         processButton.addActionListener(e -> {
-            if (currentResourceFile == null) {
+            if (currentFileProcessing == null) {
                 JOptionPane.showMessageDialog(null, "Please, choose the image!");
                 return;
             }
@@ -155,15 +259,15 @@ public class App {
                 if(curr.getSquare() < min.getSquare()) min = curr;
                 if(curr.getSquare() > max.getSquare()) max = curr;
             }
-            Mat mat = imread(RESULT_DIR_PATH + currentResourceFile.getName());
+            Mat mat = imread(RESULT_DIR_PATH + currentFileProcessing.getName());
             highlightFigure(mat, max, new Scalar(255, 0, 0), " (S(max))");
             highlightFigure(mat, min, new Scalar(0, 0, 255), " (S(min))");
 
-            Imgcodecs.imwrite(String.format("%s%s", RESULT_DIR_PATH, currentResourceFile.getName()), mat);
+            imwrite(String.format("%s%s", RESULT_DIR_PATH, currentFileProcessing.getName()), mat);
         }
 
         try {
-            String path = dirPath + currentResourceFile.getName();
+            String path = dirPath + currentFileProcessing.getName();
             image = ImageIO.read(new File(path));
         } catch (IOException ioe) {
             JOptionPane.showMessageDialog(null, ioe.getMessage());
@@ -183,107 +287,5 @@ public class App {
         table.setBackground(new Color(255, 0, 255));
 
         return table;
-    }
-
-    private static void recognize() {
-        Mat image = imread(currentResourceFile.getPath());
-        LocalTime before = LocalTime.now();
-        processFigures(image);
-
-
-        for (Figure figure : figures) {
-            highlightFigure(image, figure, new Scalar(0, 255, 0));
-        }
-        LocalTime after = LocalTime.now();
-
-        System.out.println(after.getSecond() - before.getSecond());
-
-        Imgcodecs.imwrite(String.format("%s%s", RESULT_DIR_PATH, currentResourceFile.getName()), image);
-    }
-
-    private static void highlightFigure(Mat image, Figure figure, Scalar color, String... dopInfo) {
-        Window window = figure.defineCapturingWindow();
-        FigurePoint center = figure.defineCenterPoint();
-        FigurePoint windowStartPoint = window.getStartPoint();
-        FigurePoint windowEndPoint = window.getEndPoint();
-
-        Imgproc.rectangle(image,
-                new Point(windowStartPoint.getX(), windowStartPoint.getY()),
-                new Point(windowEndPoint.getX(), windowEndPoint.getY()),
-                color, 1);
-        Imgproc.circle(
-                image, new Point(center.getX(), center.getY()), 1, color, 2);
-        Imgproc.putText(
-                image, figure.getName() + Arrays.stream(dopInfo).findFirst().orElse(""),
-                new Point(windowStartPoint.getX() + 2, windowStartPoint.getY() - 2),
-                1, 1, color, 2);
-    }
-
-    private static void countDistances() {
-        int quantity = figures.size();
-        distanceArray = new int[quantity][quantity];
-
-        for (int i = 0; i < quantity; i++) {
-            for (int j = 0; j < quantity; j++) {
-                distanceArray[i][j] = euclideanDistance(figures.get(i), figures.get(j));
-            }
-        }
-    }
-
-    private static int euclideanDistance(Figure figure1, Figure figure2) {
-        FigurePoint center1 = figure1.getCenter();
-        FigurePoint center2 = figure2.getCenter();
-
-        int xDiff = (int) Math.pow(center1.getX() - center2.getX(), 2);
-        int yDiff = (int) Math.pow(center1.getY() - center2.getY(), 2);
-
-        return (int) Math.sqrt(xDiff + yDiff);
-    }
-
-    private static void processFigures(Mat image) {
-        Figure.nameCounter = 65;
-        Queue<FigurePoint> pointsRow = new LinkedList<>();
-
-        for (int y = 0; y < image.rows(); y++) {
-            for (int x = 0; x < image.cols(); x++) {
-                while (image.get(y, x)[0] < 128) {
-                    //for (int i = x; image.get(y, x)[0] )
-                    pointsRow.add(new FigurePoint(x++, y));
-                }
-                if (!pointsRow.isEmpty()) {
-                    Figure figure = checkFigure(pointsRow);
-                    figure.addPixels(pointsRow);
-                    pointsRow.clear();
-                }
-            }
-            pointsRow.clear();
-        }
-
-//        System.out.println(figures.size());
-//        System.out.println();
-//        for (Figure figure : figures) {
-//            System.out.println(figure.defineCapturingWindow());
-//            System.out.println(figure.defineCenterPoint());
-//            System.out.println(figure.defineSquare());
-//            System.out.println();
-//        }
-//
-//        HighGui.namedWindow("image", HighGui.WINDOW_AUTOSIZE);
-//        HighGui.imshow("image", image);
-//        HighGui.waitKey();
-    }
-
-    private static Figure checkFigure(Queue<FigurePoint> points) {
-        for (Figure figure : figures) {
-            if(figure.checkBelonging(points)) return figure;
-        }
-
-        Figure figure = new Figure();
-        figures.add(figure);
-        return figure;
-    }
-
-    private static void printImage(byte[][] array) {
-        System.out.println(Arrays.deepToString(array));
     }
 }
