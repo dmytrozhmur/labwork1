@@ -34,13 +34,13 @@ import java.util.List;
  *
  */
 public class App {
-    public static final String RESOURCE_DIR_PATH = "./src/main/resources/raw/";
+    public static final String RESOURCE_DIR_PATH = "./src/main/resources/_BANK_U/";
+    public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_E/";
     public static final String RESULT_DIR_PATH = "./src/main/resources/processed/";
     private static final String IMAGE_FORMAT = ".jpg";
     private static long imageCounter = 0;
     private static File currentResourceFile;
     private static List<Figure> figures = new ArrayList<>();
-    //private static JTable table;
     private static int[][] distanceArray;
 
     public static void main(String[] args) throws IOException {
