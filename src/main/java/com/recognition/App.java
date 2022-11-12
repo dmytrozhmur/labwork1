@@ -38,7 +38,8 @@ public class App {
     public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_E/";
     public static final String RESULT_DIR_PATH = "./src/main/resources/processed/";
     private static final String IMAGE_FORMAT = ".jpg";
-    private static Map<Picture, Picture> resourceTargetMatcher = new HashMap<>();
+    private static Map<Picture, Picture> targetResourceMatcher = new HashMap<>();
+    private static List<Picture> resources = new ArrayList<>();
     private static long imageCounter = 0;
     private static File currentResourceFile;
     private static int[][] distanceArray;
@@ -71,12 +72,12 @@ public class App {
 
         JButton choiceButton = new JButton("Choose image");
         choiceButton.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser(RESOURCE_DIR_PATH);
+            JFileChooser fileChooser = new JFileChooser(TARGET_DIR_PATH);
             int response = fileChooser.showOpenDialog(null);
 
             if(response == JFileChooser.APPROVE_OPTION) {
                 currentResourceFile = fileChooser.getSelectedFile();
-                drawImage(rawImageLabel, RESOURCE_DIR_PATH);
+                drawImage(rawImageLabel, currentResourceFile.getPath());
             }
         });
 
@@ -87,37 +88,43 @@ public class App {
                 return;
             }
 
-            tablePanel.removeAll();
-            JTable infoTable = setUpInfoTable();
+//            tablePanel.removeAll();
+//            JTable infoTable = setUpInfoTable();
             recognize();
 
-            DefaultTableModel infoTableModel = (DefaultTableModel) infoTable.getModel();
-            for (int i = 0; i < figures.size(); i++) {
-                Figure figure = figures.get(i);
-                infoTableModel.addColumn(figure.getName(), new Object[]{
-                        figure.getSquare(),
-                        figure.getCenter()
-                });
-            }
-
-            drawImage(processedImageLabel, RESULT_DIR_PATH);
-
-            tablePanel.add(infoTable.getTableHeader(), BorderLayout.NORTH);
-            tablePanel.add(infoTable, BorderLayout.CENTER);
-
-            countDistances();
-            JTable distanceTable = setUpDistanceTable();
-
-            for (int i = 0; i < distanceArray.length; i++) {
-                for (int j = 0; j < distanceArray[i].length; j++) {
-                    distanceTable.setValueAt(distanceArray[i][j], i, j + 1);
+            for (Map.Entry<Picture, Picture> matching : targetResourceMatcher.entrySet()) {
+                if(matching.getKey().getFilePath().equals(currentResourceFile.getPath())) {
+                    drawImage(processedImageLabel, matching.getValue().getFilePath());
                 }
             }
 
-            tablePanel.add(distanceTable, BorderLayout.SOUTH);
-            tablePanel.revalidate();
-
-            figures.clear();
+//            DefaultTableModel infoTableModel = (DefaultTableModel) infoTable.getModel();
+//            for (int i = 0; i < figures.size(); i++) {
+//                Figure figure = figures.get(i);
+//                infoTableModel.addColumn(figure.getName(), new Object[]{
+//                        figure.getSquare(),
+//                        figure.getCenter()
+//                });
+//            }
+//
+//            drawImage(processedImageLabel, RESULT_DIR_PATH);
+//
+//            tablePanel.add(infoTable.getTableHeader(), BorderLayout.NORTH);
+//            tablePanel.add(infoTable, BorderLayout.CENTER);
+//
+//            countDistances();
+//            JTable distanceTable = setUpDistanceTable();
+//
+//            for (int i = 0; i < distanceArray.length; i++) {
+//                for (int j = 0; j < distanceArray[i].length; j++) {
+//                    distanceTable.setValueAt(distanceArray[i][j], i, j + 1);
+//                }
+//            }
+//
+//            tablePanel.add(distanceTable, BorderLayout.SOUTH);
+//            tablePanel.revalidate();
+//
+//            figures.clear();
         });
 
 
@@ -128,19 +135,6 @@ public class App {
         container.setVisible(true);
     }
 
-    private static JTable setUpDistanceTable() {
-        int size = figures.size();
-        JTable table = new JTable(size, size + 1);
-
-        for (int i = 0, j = 65; i < size; i++, j++) {
-            char name = (char) j;
-            table.setValueAt("Distance to " + name, i, 0);
-        }
-        table.setBackground(new Color(0, 255, 255));
-
-        return table;
-    }
-
     private static JPanel setUpTablePanel() {
         JPanel tablePanel = new JPanel();
         tablePanel.setLayout(new BorderLayout());
@@ -148,34 +142,18 @@ public class App {
         return tablePanel;
     }
 
-    private static void drawImage(JLabel processedImageLabel, String dirPath) {
+    private static void drawImage(JLabel imageLabel, String filePath) {
         BufferedImage image = null;
 
-        if(figures.size() > 0) {
-            Figure max = figures.get(0);
-            Figure min = figures.get(0);
-            for (int i = 1; i < figures.size(); i++) {
-                Figure curr = figures.get(i);
-                if(curr.getSquare() < min.getSquare()) min = curr;
-                if(curr.getSquare() > max.getSquare()) max = curr;
-            }
-            Mat mat = imread(RESULT_DIR_PATH + currentResourceFile.getName());
-            highlightFigure(mat, max, new Scalar(255, 0, 0), " (S(max))");
-            highlightFigure(mat, min, new Scalar(0, 0, 255), " (S(min))");
-
-            Imgcodecs.imwrite(String.format("%s%s", RESULT_DIR_PATH, currentResourceFile.getName()), mat);
-        }
-
         try {
-            String path = dirPath + currentResourceFile.getName();
+            String path = filePath;
             image = ImageIO.read(new File(path));
         } catch (IOException ioe) {
             JOptionPane.showMessageDialog(null, ioe.getMessage());
         }
 
-
-        processedImageLabel.setIcon(new ImageIcon(image));
-        processedImageLabel.repaint();
+        imageLabel.setIcon(new ImageIcon(image));
+        imageLabel.repaint();
     }
 
     private static JTable setUpInfoTable() {
@@ -223,17 +201,6 @@ public class App {
                 1, 1, color, 2);
     }
 
-    private static void countDistances() {
-        int quantity = figures.size();
-        distanceArray = new int[quantity][quantity];
-
-        for (int i = 0; i < quantity; i++) {
-            for (int j = 0; j < quantity; j++) {
-                distanceArray[i][j] = euclideanDistance(figures.get(i), figures.get(j));
-            }
-        }
-    }
-
     private static int euclideanDistance(Figure figure1, Figure figure2) {
         FigurePoint center1 = figure1.getCenter();
         FigurePoint center2 = figure2.getCenter();
@@ -275,13 +242,13 @@ public class App {
     }
 
     private static void addToMatcher(Picture picture) {
-        if(resourceTargetMatcher.size() >= 10) {
-            for (Picture resource : resourceTargetMatcher.keySet()) {
+        if(resources.size() >= 10) {
+            for (Picture resource : resources) {
                 if(picture.isSimilarTo(resource))
-                    resourceTargetMatcher.put(resource, picture);
+                    targetResourceMatcher.put(picture, resource);
             }
         } else {
-            resourceTargetMatcher.put(picture, null);
+            resources.add(picture);
         }
     }
 
