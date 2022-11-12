@@ -38,9 +38,9 @@ public class App {
     public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_E/";
     public static final String RESULT_DIR_PATH = "./src/main/resources/processed/";
     private static final String IMAGE_FORMAT = ".jpg";
+    private static Map<Picture, Picture> resourceTargetMatcher = new HashMap<>();
     private static long imageCounter = 0;
     private static File currentResourceFile;
-    private static List<Figure> figures = new ArrayList<>();
     private static int[][] distanceArray;
 
     public static void main(String[] args) throws IOException {
@@ -49,14 +49,13 @@ public class App {
 
         File[] resourceFiles = new File(RESOURCE_DIR_PATH).listFiles();
         for (File resource : resourceFiles) {
-            processFigure(resource);
+            processFigures(resource);
         }
     }
 
     private static void setUpUi() {
         JFrame container = new JFrame();
         container.setLayout(new BorderLayout());
-        //JTable infoTable = new JTable();
 
         JPanel tablePanel = setUpTablePanel();
         container.add(tablePanel, BorderLayout.SOUTH);
@@ -193,12 +192,12 @@ public class App {
     private static void recognize() {
         Mat image = imread(currentResourceFile.getPath());
         LocalTime before = LocalTime.now();
-        processFigures(image);
+        processFigures(currentResourceFile);
 
 
-        for (Figure figure : figures) {
-            highlightFigure(image, figure, new Scalar(0, 255, 0));
-        }
+//        for (Figure figure : figures) {
+//            highlightFigure(image, figure, new Scalar(0, 255, 0));
+//        }
         LocalTime after = LocalTime.now();
 
         System.out.println(after.getSecond() - before.getSecond());
@@ -245,7 +244,14 @@ public class App {
         return (int) Math.sqrt(xDiff + yDiff);
     }
 
-    private static void processFigures(Mat image) {
+    private static void processFigures(File imageFile) {
+        Picture picture = new Picture();
+        List<Figure> figures = new ArrayList<>();
+
+        String path = imageFile.getPath();
+        picture.setFilePath(path);
+        Mat image = imread(path);
+
         Figure.nameCounter = 65;
         Queue<FigurePoint> pointsRow = new LinkedList<>();
 
@@ -256,7 +262,7 @@ public class App {
                     pointsRow.add(new FigurePoint(x++, y));
                 }
                 if (!pointsRow.isEmpty()) {
-                    Figure figure = checkFigure(pointsRow);
+                    Figure figure = checkFigure(pointsRow, figures);
                     figure.addPixels(pointsRow);
                     pointsRow.clear();
                 }
@@ -264,21 +270,22 @@ public class App {
             pointsRow.clear();
         }
 
-//        System.out.println(figures.size());
-//        System.out.println();
-//        for (Figure figure : figures) {
-//            System.out.println(figure.defineCapturingWindow());
-//            System.out.println(figure.defineCenterPoint());
-//            System.out.println(figure.defineSquare());
-//            System.out.println();
-//        }
-//
-//        HighGui.namedWindow("image", HighGui.WINDOW_AUTOSIZE);
-//        HighGui.imshow("image", image);
-//        HighGui.waitKey();
+        picture.setFigures(figures);
+        addToMatcher(picture);
     }
 
-    private static Figure checkFigure(Queue<FigurePoint> points) {
+    private static void addToMatcher(Picture picture) {
+        if(resourceTargetMatcher.size() >= 10) {
+            for (Picture resource : resourceTargetMatcher.keySet()) {
+                if(picture.isSimilarTo(resource))
+                    resourceTargetMatcher.put(resource, picture);
+            }
+        } else {
+            resourceTargetMatcher.put(picture, null);
+        }
+    }
+
+    private static Figure checkFigure(Queue<FigurePoint> points, List<Figure> figures) {
         for (Figure figure : figures) {
             if(figure.checkBelonging(points)) return figure;
         }
