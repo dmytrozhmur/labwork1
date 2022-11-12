@@ -46,6 +46,11 @@ public class App {
     public static void main(String[] args) throws IOException {
         OpenCV.loadShared();
         setUpUi();
+
+        File[] resourceFiles = new File(RESOURCE_DIR_PATH).listFiles();
+        for (File resource : resourceFiles) {
+            processFigure(resource);
+        }
     }
 
     private static void setUpUi() {
