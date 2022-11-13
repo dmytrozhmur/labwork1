@@ -26,8 +26,9 @@ import java.io.IOException;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
-        import static org.opencv.imgcodecs.Imgcodecs.imread;
+import static org.opencv.imgcodecs.Imgcodecs.imread;
 
 /**
  * Hello world!
@@ -36,7 +37,7 @@ import java.util.List;
 public class App {
     public static final String RESOURCE_DIR_PATH = "./src/main/resources/_BANK_U/";
     public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_E/";
-    public static final String RESULT_DIR_PATH = "./src/main/resources/processed/";
+    public static final String RESULT_DIR_PATH = "./src/main/resources/scaled/";
     private static final String IMAGE_FORMAT = ".jpg";
     private static Map<Picture, Picture> targetResourceMatcher = new HashMap<>();
     private static List<Picture> resources = new ArrayList<>();
@@ -50,7 +51,7 @@ public class App {
 
         File[] resourceFiles = new File(RESOURCE_DIR_PATH).listFiles();
         for (File resource : resourceFiles) {
-            processFigures(resource);
+            processFigures(resource, true);
         }
     }
 
@@ -170,7 +171,7 @@ public class App {
     private static void recognize() {
         Mat image = imread(currentResourceFile.getPath());
         LocalTime before = LocalTime.now();
-        processFigures(currentResourceFile);
+        processFigures(currentResourceFile, true);
 
 
 //        for (Figure figure : figures) {
@@ -201,17 +202,7 @@ public class App {
                 1, 1, color, 2);
     }
 
-    private static int euclideanDistance(Figure figure1, Figure figure2) {
-        FigurePoint center1 = figure1.getCenter();
-        FigurePoint center2 = figure2.getCenter();
-
-        int xDiff = (int) Math.pow(center1.getX() - center2.getX(), 2);
-        int yDiff = (int) Math.pow(center1.getY() - center2.getY(), 2);
-
-        return (int) Math.sqrt(xDiff + yDiff);
-    }
-
-    private static void processFigures(File imageFile) {
+    private static List<Figure> processFigures(File imageFile, boolean toMatcher) {
         Picture picture = new Picture();
         List<Figure> figures = new ArrayList<>();
 
@@ -225,7 +216,6 @@ public class App {
         for (int y = 0; y < image.rows(); y++) {
             for (int x = 0; x < image.cols(); x++) {
                 while (image.get(y, x)[0] < 128) {
-                    //for (int i = x; image.get(y, x)[0] )
                     pointsRow.add(new FigurePoint(x++, y));
                 }
                 if (!pointsRow.isEmpty()) {
@@ -238,14 +228,41 @@ public class App {
         }
 
         picture.setFigures(figures);
-        addToMatcher(picture);
+        if(toMatcher) addToMatcher(picture);
+
+        return figures;
     }
 
     private static void addToMatcher(Picture picture) {
         if(resources.size() >= 10) {
-            for (Picture resource : resources) {
-                if(picture.isSimilarTo(resource))
+            List<Picture> priorityResources = resources.stream().filter(res -> {
+                FigurePoint currStartPoint = picture.getFigures().get(0).defineCapturingWindow().getStartPoint();
+                FigurePoint currEndPoint = picture.getFigures().get(0).defineCapturingWindow().getEndPoint();
+                FigurePoint resStartPoint = picture.getFigures().get(0).defineCapturingWindow().getStartPoint();
+                FigurePoint resEndPoint = picture.getFigures().get(0).defineCapturingWindow().getEndPoint();
+
+                int currWidth = currStartPoint.getX() - currEndPoint.getX();
+                int currHeight = currStartPoint.getY() - currEndPoint.getY();
+                int resWidth = resStartPoint.getX() - resEndPoint.getX();
+                int resHeight = resStartPoint.getY() - resEndPoint.getY();
+
+                return currWidth == resWidth && currHeight == resHeight;
+            }).filter(picture::isSimilarTo).collect(Collectors.toList());
+            if(priorityResources.size() == 1) {
+                targetResourceMatcher.put(picture, priorityResources.get(0));
+                return;
+            }
+//                    res -> {
+//                if(picture.isSimilarTo(res)) {
+//
+//                }
+//            }).;
+            for (Picture resource : priorityResources) {
+                changeScale(picture, resource);
+                if(picture.isSimilarTo(resource)) {
                     targetResourceMatcher.put(picture, resource);
+                    return;
+                }
             }
         } else {
             resources.add(picture);
@@ -260,6 +277,47 @@ public class App {
         Figure figure = new Figure();
         figures.add(figure);
         return figure;
+    }
+
+    private static void changeScale(Picture target, Picture resource) {
+        FigurePoint currStartPoint = target.getFigures().get(0).defineCapturingWindow().getStartPoint();
+        FigurePoint currEndPoint = target.getFigures().get(0).defineCapturingWindow().getEndPoint();
+        FigurePoint resStartPoint = resource.getFigures().get(0).defineCapturingWindow().getStartPoint();
+        FigurePoint resEndPoint = resource.getFigures().get(0).defineCapturingWindow().getEndPoint();
+
+        int currWidth = currStartPoint.getX() - currEndPoint.getX();
+        int currHeight = currStartPoint.getY() - currEndPoint.getY();
+        float resWidth = resStartPoint.getX() - resEndPoint.getX();
+        float resHeight = resStartPoint.getY() - resEndPoint.getY();
+        double widthDiff = currWidth / resWidth;
+        double heightDiff = currHeight / resHeight;
+
+        resizeFigures(widthDiff, heightDiff, target);
+    }
+
+    private static void resizeFigures(double widthDiff, double heightDiff, Picture picture) {
+        BufferedImage bufferedImage;
+        File newImageFile = new File(RESULT_DIR_PATH + currentResourceFile.getName());
+
+        try {
+            bufferedImage = ImageIO.read(new File(picture.getFilePath()));
+            Image result = bufferedImage.getScaledInstance(
+                    (int) (bufferedImage.getWidth() * widthDiff),
+                    (int) (bufferedImage.getHeight() * heightDiff),
+                    Image.SCALE_DEFAULT);
+
+            BufferedImage bimage = new BufferedImage(result.getWidth(null), result.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+
+            Graphics2D bGr = bimage.createGraphics();
+            bGr.drawImage(result, 0, 0, null);
+            bGr.dispose();
+
+            ImageIO.write(bimage, "png", newImageFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        picture.setFigures(processFigures(newImageFile, false));
     }
 
     private static void printImage(byte[][] array) {

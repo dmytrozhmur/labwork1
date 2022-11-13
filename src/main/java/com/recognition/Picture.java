@@ -60,8 +60,10 @@ public class Picture {
     private boolean checkCoincidences(Picture resource) {
         Figure currWrapper = figures.get(0);
         Figure resourceWrapper = resource.getFigures().get(0);
-        FigurePoint currStartPoint = currWrapper.defineCapturingWindow().getStartPoint();
-        FigurePoint resourceStartPoint = resourceWrapper.defineCapturingWindow().getStartPoint();
+        Window currWindow = currWrapper.defineCapturingWindow();
+        Window resourceWindow = resourceWrapper.defineCapturingWindow();
+        FigurePoint currStartPoint = currWindow.getStartPoint();
+        FigurePoint resourceStartPoint = resourceWindow.getStartPoint();
 
         List<FigurePoint> currFigure = currWrapper.getPixels().stream()
                 .map(point -> new FigurePoint(point.getX() - currStartPoint.getX(),
@@ -72,11 +74,13 @@ public class Picture {
                         point.getY() - resourceStartPoint.getY()))
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        for (int i = 0; i < currFigure.size(); i++) {
-            if(!currFigure.get(i).equals(resourceFigure.get(i)))
-                return false;
+        long identicalPixels = 0;
+        int currSize = currFigure.size();
+        for (int i = 0; i < currSize && i < resourceFigure.size(); i++) {
+            if(currFigure.get(i).equals(resourceFigure.get(i)))
+                identicalPixels++;
         }
-        return true;
+        return identicalPixels > currSize / 1.2;
     }
 
     private enum Positioning {
