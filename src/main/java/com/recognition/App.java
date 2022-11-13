@@ -35,8 +35,8 @@ import static org.opencv.imgcodecs.Imgcodecs.imread;
  *
  */
 public class App {
-    public static final String RESOURCE_DIR_PATH = "./src/main/resources/_BANK_U/";
-    public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_E/";
+    public static final String RESOURCE_DIR_PATH = "./src/main/resources/_BANK_E/";
+    public static final String TARGET_DIR_PATH = "./src/main/resources/_BANK_U/";
     public static final String RESULT_DIR_PATH = "./src/main/resources/scaled/";
     private static final String IMAGE_FORMAT = ".jpg";
     private static Map<Picture, Picture> targetResourceMatcher = new HashMap<>();
@@ -234,7 +234,7 @@ public class App {
     }
 
     private static void addToMatcher(Picture picture) {
-        if(resources.size() >= 10) {
+        if(resources.size() >= 19) {
             List<Picture> priorityResources = resources.stream().filter(res -> {
                 FigurePoint currStartPoint = picture.getFigures().get(0).defineCapturingWindow().getStartPoint();
                 FigurePoint currEndPoint = picture.getFigures().get(0).defineCapturingWindow().getEndPoint();
