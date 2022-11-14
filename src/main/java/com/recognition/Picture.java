@@ -60,27 +60,17 @@ public class Picture {
     private boolean checkCoincidences(Picture resource) {
         Figure currWrapper = figures.get(0);
         Figure resourceWrapper = resource.getFigures().get(0);
-        Window currWindow = currWrapper.defineCapturingWindow();
-        Window resourceWindow = resourceWrapper.defineCapturingWindow();
-        FigurePoint currStartPoint = currWindow.getStartPoint();
-        FigurePoint resourceStartPoint = resourceWindow.getStartPoint();
-
-        List<FigurePoint> currFigure = currWrapper.getPixels().stream()
-                .map(point -> new FigurePoint(point.getX() - currStartPoint.getX(),
-                        point.getY() - currStartPoint.getY()))
-                .collect(Collectors.toCollection(ArrayList::new));
-        List<FigurePoint> resourceFigure = resourceWrapper.getPixels().stream()
-                .map(point -> new FigurePoint(point.getX() - resourceStartPoint.getX(),
-                        point.getY() - resourceStartPoint.getY()))
-                .collect(Collectors.toCollection(ArrayList::new));
+        List<FigurePoint> currFigure = currWrapper.getPixels();
+        List<FigurePoint> resourceFigure = resourceWrapper.getPixels();
 
         long identicalPixels = 0;
-        int currSize = currFigure.size();
-        for (int i = 0; i < currSize && i < resourceFigure.size(); i++) {
-            if(currFigure.get(i).equals(resourceFigure.get(i)))
+        int currSize = currWrapper.getSquare();
+        for (int i = 0; i < currSize && i < resourceWrapper.getSquare(); i++) {
+            final int index = i;
+            if(resourceFigure.stream().anyMatch(p -> p.equals(currFigure.get(index))))
                 identicalPixels++;
         }
-        return identicalPixels > currSize / 1.2;
+        return identicalPixels > currSize / 1.1;
     }
 
     private enum Positioning {

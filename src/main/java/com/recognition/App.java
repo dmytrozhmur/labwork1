@@ -51,7 +51,7 @@ public class App {
 
         File[] resourceFiles = new File(RESOURCE_DIR_PATH).listFiles();
         for (File resource : resourceFiles) {
-            processFigures(resource, true);
+            processFigures(resource);
         }
     }
 
@@ -171,7 +171,7 @@ public class App {
     private static void recognize() {
         Mat image = imread(currentResourceFile.getPath());
         LocalTime before = LocalTime.now();
-        processFigures(currentResourceFile, true);
+        processFigures(currentResourceFile);
 
 
 //        for (Figure figure : figures) {
@@ -185,7 +185,7 @@ public class App {
     }
 
     private static void highlightFigure(Mat image, Figure figure, Scalar color, String... dopInfo) {
-        Window window = figure.defineCapturingWindow();
+        Window window = figure.getCapturingWindow();
         FigurePoint center = figure.defineCenterPoint();
         FigurePoint windowStartPoint = window.getStartPoint();
         FigurePoint windowEndPoint = window.getEndPoint();
@@ -202,54 +202,62 @@ public class App {
                 1, 1, color, 2);
     }
 
-    private static List<Figure> processFigures(File imageFile, boolean toMatcher) {
+    private static void processFigures(File imageFile) {
         Picture picture = new Picture();
-        List<Figure> figures = new ArrayList<>();
 
         String path = imageFile.getPath();
         picture.setFilePath(path);
-        Mat image = imread(path);
+
+        List<Figure> figures = extractFigures(path);
+        picture.setFigures(figures);
+        addToMatcher(picture);
+    }
+
+    private static List<Figure> extractFigures(String imageFilePath) {
+        Mat image = imread(imageFilePath);
 
         Figure.nameCounter = 65;
         Queue<FigurePoint> pointsRow = new LinkedList<>();
 
+        List<Figure> figures = new ArrayList<>();
         for (int y = 0; y < image.rows(); y++) {
             for (int x = 0; x < image.cols(); x++) {
                 while (image.get(y, x)[0] < 128) {
                     pointsRow.add(new FigurePoint(x++, y));
                 }
                 if (!pointsRow.isEmpty()) {
-                    Figure figure = checkFigure(pointsRow, figures);
-                    figure.addPixels(pointsRow);
+                    if(pointsRow.size() > 2) {
+                        Figure figure = checkFigure(pointsRow, figures);
+                        figure.addPixels(pointsRow);
+                    }
                     pointsRow.clear();
                 }
             }
             pointsRow.clear();
         }
 
-        picture.setFigures(figures);
-        if(toMatcher) addToMatcher(picture);
-
+        figures.forEach(Figure::correctPixels);
         return figures;
     }
 
     private static void addToMatcher(Picture picture) {
         if(resources.size() >= 19) {
-            List<Picture> priorityResources = resources.stream().filter(res -> {
-                FigurePoint currStartPoint = picture.getFigures().get(0).defineCapturingWindow().getStartPoint();
-                FigurePoint currEndPoint = picture.getFigures().get(0).defineCapturingWindow().getEndPoint();
-                FigurePoint resStartPoint = picture.getFigures().get(0).defineCapturingWindow().getStartPoint();
-                FigurePoint resEndPoint = picture.getFigures().get(0).defineCapturingWindow().getEndPoint();
-
-                int currWidth = currStartPoint.getX() - currEndPoint.getX();
-                int currHeight = currStartPoint.getY() - currEndPoint.getY();
-                int resWidth = resStartPoint.getX() - resEndPoint.getX();
-                int resHeight = resStartPoint.getY() - resEndPoint.getY();
-
-                return currWidth == resWidth && currHeight == resHeight;
-            }).filter(picture::isSimilarTo).collect(Collectors.toList());
-            if(priorityResources.size() == 1) {
-                targetResourceMatcher.put(picture, priorityResources.get(0));
+            Picture priorityResource = resources.stream().filter(picture::isSimilarTo).findFirst().orElse(null);
+//            if(priorityResource == null) priorityResource = resources.stream().filter(res -> {
+//                FigurePoint currStartPoint = picture.getFigures().get(0).getCapturingWindow().getStartPoint();
+//                FigurePoint currEndPoint = picture.getFigures().get(0).getCapturingWindow().getEndPoint();
+//                FigurePoint resStartPoint = picture.getFigures().get(0).getCapturingWindow().getStartPoint();
+//                FigurePoint resEndPoint = picture.getFigures().get(0).getCapturingWindow().getEndPoint();
+//
+//                int currWidth = currStartPoint.getX() - currEndPoint.getX();
+//                int currHeight = currStartPoint.getY() - currEndPoint.getY();
+//                int resWidth = resStartPoint.getX() - resEndPoint.getX();
+//                int resHeight = resStartPoint.getY() - resEndPoint.getY();
+//
+//                return Math.abs(currWidth - resWidth) < 10 && Math.abs(currHeight - resHeight) < 10;
+//            }).filter(picture::isSimilarTo).findFirst().orElse(null);
+            if(priorityResource != null) {
+                targetResourceMatcher.put(picture, priorityResource);
                 return;
             }
 //                    res -> {
@@ -257,9 +265,9 @@ public class App {
 //
 //                }
 //            }).;
-            for (Picture resource : priorityResources) {
-                changeScale(picture, resource);
-                if(picture.isSimilarTo(resource)) {
+            for (Picture resource : resources) {
+                Picture scaledPicture = changeScale(picture, resource);
+                if(scaledPicture.isSimilarTo(resource)) {
                     targetResourceMatcher.put(picture, resource);
                     return;
                 }
@@ -279,20 +287,23 @@ public class App {
         return figure;
     }
 
-    private static void changeScale(Picture target, Picture resource) {
-        FigurePoint currStartPoint = target.getFigures().get(0).defineCapturingWindow().getStartPoint();
-        FigurePoint currEndPoint = target.getFigures().get(0).defineCapturingWindow().getEndPoint();
-        FigurePoint resStartPoint = resource.getFigures().get(0).defineCapturingWindow().getStartPoint();
-        FigurePoint resEndPoint = resource.getFigures().get(0).defineCapturingWindow().getEndPoint();
+    private static Picture changeScale(Picture target, Picture resource) {
+        FigurePoint currStartPoint = target.getFigures().get(0).getCapturingWindow().getStartPoint();
+        FigurePoint currEndPoint = target.getFigures().get(0).getCapturingWindow().getEndPoint();
+        FigurePoint resStartPoint = resource.getFigures().get(0).getCapturingWindow().getStartPoint();
+        FigurePoint resEndPoint = resource.getFigures().get(0).getCapturingWindow().getEndPoint();
 
-        int currWidth = currStartPoint.getX() - currEndPoint.getX();
-        int currHeight = currStartPoint.getY() - currEndPoint.getY();
-        float resWidth = resStartPoint.getX() - resEndPoint.getX();
-        float resHeight = resStartPoint.getY() - resEndPoint.getY();
-        double widthDiff = currWidth / resWidth;
-        double heightDiff = currHeight / resHeight;
+        int currWidth = currEndPoint.getX() - currStartPoint.getX();
+        int currHeight = currEndPoint.getY() - currStartPoint.getY();
+        float resWidth = resEndPoint.getX() - resStartPoint.getX();
+        float resHeight = resEndPoint.getY() - resStartPoint.getY();
+        double widthDiff = resWidth / currWidth;
+        double heightDiff = resHeight / currHeight;
 
-        resizeFigures(widthDiff, heightDiff, target);
+        Picture resizedPicture = new Picture();
+        resizedPicture.setFilePath(target.getFilePath());
+        resizeFigures(widthDiff, heightDiff, resizedPicture);
+        return resizedPicture;
     }
 
     private static void resizeFigures(double widthDiff, double heightDiff, Picture picture) {
@@ -301,9 +312,11 @@ public class App {
 
         try {
             bufferedImage = ImageIO.read(new File(picture.getFilePath()));
+            int widthChange = (int) (bufferedImage.getWidth() * widthDiff);
+            int heightChange = (int) (bufferedImage.getHeight() * heightDiff);
             Image result = bufferedImage.getScaledInstance(
-                    (int) (bufferedImage.getWidth() * widthDiff),
-                    (int) (bufferedImage.getHeight() * heightDiff),
+                    widthChange,
+                    heightChange,
                     Image.SCALE_DEFAULT);
 
             BufferedImage bimage = new BufferedImage(result.getWidth(null), result.getHeight(null), BufferedImage.TYPE_INT_ARGB);
@@ -317,7 +330,9 @@ public class App {
             e.printStackTrace();
         }
 
-        picture.setFigures(processFigures(newImageFile, false));
+        String path = newImageFile.getPath();
+        picture.setFilePath(path);
+        picture.setFigures(extractFigures(path));
     }
 
     private static void printImage(byte[][] array) {
